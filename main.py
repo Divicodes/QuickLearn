@@ -5,7 +5,6 @@ from moviepy.editor import (
     CompositeVideoClip,
     AudioFileClip,
 )
-from PIL import Image
 
 from PIL import Image
 
