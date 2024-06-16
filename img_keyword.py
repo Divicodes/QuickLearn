@@ -1,6 +1,6 @@
 import os
 import openai
-from chunking import result 
+from chunking import result
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,15 +8,15 @@ load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
-
-
-
 def generate_keywords(script):
     response = openai.chat.completions.create(
         model="gpt-4o",
         messages=[
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": f"Based on the given sentence '{script}', generate one keyword which is used to search for the stock image related to the sentence."}
+            {
+                "role": "user",
+                "content": f"Based on the given sentence '{script}', generate one keyword which is used to search for the stock image related to the sentence.",
+            },
         ],
         n=1,
         stop=None,
@@ -30,4 +30,3 @@ def generate_keywords(script):
 for line in result.splitlines():
     keyword = generate_keywords(line)
     print(keyword)
-

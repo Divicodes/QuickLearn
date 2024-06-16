@@ -83,9 +83,25 @@ def get_explanation(topics, interests):
                 f.write(response.content)
 
     for i, keyword in enumerate(keywords):
-        api.search(keyword, page=1, results_per_page=1)
+        print("##############")
+        print("##############")
+        print("##############")
+        print("##############")
+        print(keyword)
+        api.search(keyword, page=1, results_per_page=3)
         photos = api.get_entries()
-        download_image(photos[0], f"images/{i}.jpg")
+        print(photos)
+        for photo in photos:
+            print(photo.url)
+
+        photo = photos[0]
+        response = requests.get(photo.large, allow_redirects=True)
+        filename = f"images/{photo.id}.{photo.extension}"
+        if response.status_code == 200:
+            with open(filename, "wb") as f:
+                f.write(response.content)
+
+        # download_image(photos[0], f"images/{i}.jpg")
 
     # Generate video
     from moviepy.editor import (
@@ -137,6 +153,7 @@ def get_explanation(topics, interests):
 
     # Get the images from the images folder. Use os listdir
     images = os.listdir("images")
+    images = [f"images/{image}" for image in images]
 
     # Get audio
     audios = os.listdir("audio")
@@ -145,42 +162,46 @@ def get_explanation(topics, interests):
 
     # Resize the images
     for i in range(len(images)):
-        resized_image_path = images[i].replace(".jpg", "_resized.jpg")
-        resize_image(images[i], resized_image_path, (1280, 720))
-        images[i] = resized_image_path
+        # resized_image_path = images[i].replace(".jpg", "_resized.jpg")
+        resize_image(images[i], images[i], (1280, 720))
+        # images[i] = "images/" + resized_image_path
 
     # find duration of the audio from the audio file
     from pydub import AudioSegment
 
-    audio = AudioSegment.from_file("audio/speech.mp3")
+    audio = AudioSegment.from_file(speech_file_path)
     audio_duration = audio.duration_seconds
+
+    # Load the audio clip once
+    audio = AudioFileClip(speech_file_path)
+
+    # Calculate the duration for each image clip based on the total audio duration
+    clip_duration = audio.duration / len(images)
+
+    clips = []  # To store each clip with audio
 
     # Generate a clip for each image
     for i in range(len(images)):
-        # Create an image clip. Image displayed for 20 seconds.
-        image_clip = ImageClip(images[i], duration=audio_duration / len(images))
+        # Create an image clip. Image displayed for an equal part of the audio.
+        image_clip = ImageClip(images[i], duration=clip_duration)
 
-        # # Create a text clip for subtitles
-        # txt_clip = TextClip(subtitles[i], fontsize=50, color="white", bg_color="black")
-        # txt_clip = txt_clip.set_position("bottom").set_duration(20)
-
-        # Load the corresponding audio
-        audio = AudioFileClip(audios[0])
-
-        # Set the audio of the image clip
-        image_clip = image_clip.set_audio(audio)
-
-        # Overlay text on image
-        # video = CompositeVideoClip([image_clip, image_clip])
+        # Set the audio for the image clip starting221 from the right offset
+        image_clip = image_clip.set_audio(
+            audio.subclip(i * clip_duration, (i + 1) * clip_duration)
+        )
 
         # Append the clip to the list of clips
         clips.append(image_clip)
 
     # Concatenate all the clips together
-    final_clip = concatenate_videoclips(clips)
+    final_clip = concatenate_videoclips(clips, method="compose")
 
     # Write the result to a file
     final_clip.write_videofile("output_video.mp4", fps=24)
+
+    # Remove the images
+    for image in images:
+        os.remove(image)
 
     # explanation = f"Imagine each castle as a node (or vertex) in a graph. The roads connecting these castles are the edges of the graph. Graph theory studies how these castles are connected. For example, it can answer questions like how many different routes you can take to get from one castle to another, which castle is the easiest to reach from all others, or if there's a way to visit every castle without crossing the same road twice. This kind of analysis helps in planning the best paths for travel, defense strategies, or even in understanding relationships between different entities represented by the castles and roads."
     video_url = "output_video.mp4"
@@ -216,7 +237,7 @@ with tab1:
 # Content for the 'Settings' tab
 with tab2:
     st.header("Settings")
-    user_info = st.text_area("Tell us about yourself", key="user_info")
+    user_info = st.text_area("What are your interests", key="user_info")
     if st.button("Save", key="save_settings"):
         st.session_state["user_info"] = user_info
         st.success("Settings saved!")
