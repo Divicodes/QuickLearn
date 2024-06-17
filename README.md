@@ -7,3 +7,9 @@
 ```bash
 pip install -r requirements.txt
 ```
+
+# Running the streamlit app
+- Run the following command to start the streamlit app:
+```bash
+streamlit run app.py
+```
