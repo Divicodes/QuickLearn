@@ -19,3 +19,14 @@ streamlit run app.py
 ```bash
 python remove_artifacts.py
 ```
+
+Example: 
+Topic - Graph Theory
+Interests - Marvel Movies
+
+Output Video:
+
+
+https://github.com/Divicodes/QuickLearn/assets/91343818/481088a0-d4e7-44f6-b7ef-7c18d519e261
+
+
