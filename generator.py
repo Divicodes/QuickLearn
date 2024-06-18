@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from pexels_api import API
 import os
 import requests
+import uuid
 from moviepy.editor import (
     ImageClip,
     concatenate_videoclips,
@@ -42,7 +43,7 @@ def get_image_search_term(sentence: str) -> str:
             {"role": "system", "content": "You are a helpful assistant."},
             {
                 "role": "user",
-                "content": f"Based on the given sentence '{sentence}', generate one keyword which is used to search for the stock image related to the sentence.",
+                "content": f"Based on the given sentence '{sentence}', generate a prompt to create an image which resembles memes using dalle3. exclude any keyword that violates content_policy_violation",
             },
         ],
         n=1,
@@ -83,86 +84,45 @@ def generate_analogy(interests: str, topic: str) -> str:
     return script
 
 
-def get_photos(search_term: str, page=1, results_per_page=1) -> List[Photo]:
-    """Get a list of photos based on the search term.
+def generate_images_dalle(search_term: str, num_images: int = 1) -> List[str]:
+    """
+    Generate images using DALL-E 3 API based on the search term.
 
     Args:
-        search_term (str): The search term to find photos.
-        page (int, optional): Number of pages to retrieve. Defaults to 1.
-        results_per_page (int, optional): Number of results to show per page. Defaults to 1.
+        search_term (str): The search term to generate images.
+        num_images (int, optional): Number of images to generate. Defaults to 1.
 
     Returns:
-        List[Photo]: A list of pexel photo objects based on the search term.
+        List[str]: A list of file paths to the generated images.
     """
-    api = API(os.getenv("PEXELS_API_KEY"))
+    openai.api_key = os.getenv("OPENAI_API_KEY")
 
-    api.search(search_term, page=page, results_per_page=results_per_page)
-    photos = api.get_entries()
+    response = openai.images.generate(
+        model="dall-e-3",
+        prompt=search_term,
+        size="1024x1024",
+        quality="standard",
+        n=num_images
+        
+    )
+    # print(response)
+    # print(response.data)
+    image_urls = [image.url for image in response.data]
+    image_paths = []
 
-    return photos
-
-
-def download_image(photo: Photo, output_dir: str = os.getcwd()) -> str:
-    """Download an image from the Pexels API.
-
-    Args:
-        photo (Photo): The photo object to download.
-        output_dir (str, optional): Output directory to save the image in. Defaults to os.getcwd().
-
-    Raises:
-        Exception: If the image download fails.
-
-    Returns:
-        str: The filename of the downloaded image.
-    """
-    # Get the image content
-    response = requests.get(photo.large, allow_redirects=True)
-
-    # Save the image content to a file
-    filename = os.path.join(output_dir, f"{photo.id}.{photo.extension}")
-
-    if response.status_code == 200:
-        with open(filename, "wb") as f:
-            f.write(response.content)
-    else:
-        raise Exception("Failed to retrieve image.")
-
-    return filename
-
-
-def resize_image(image_path, output_image_path, target_size):
-    """Resize the image to the target size and pad the resized image with black color.
-
-    Args:
-        image_path (str): The path to the image file.
-        output_image_path (str): The path to save the resized image.
-        target_size (Tuple[int, int]): A tuple of the target width and height.
-    """
-    with Image.open(image_path) as img:
-        # Calculate the new size preserving the aspect ratio
-        img_ratio = img.width / img.height
-        target_ratio = target_size[0] / target_size[1]
-        if target_ratio > img_ratio:
-            new_height = target_size[1]
-            new_width = int(new_height * img_ratio)
+    for i, url in enumerate(image_urls):
+        response = requests.get(url, stream=True)
+        # img_name = f"img_{i}.png"
+        image_path = os.path.join(DEFAULT_IMAGE_DIR, f"{uuid.uuid4()}.png")
+        
+        if response.status_code == 200:
+            with open(image_path, 'wb') as f:
+                f.write(response.content)
+            image_paths.append(image_path)
         else:
-            new_width = target_size[0]
-            new_height = int(new_width / img_ratio)
+            raise Exception("Failed to retrieve image from DALL-E 3.")
 
-        # Resize the image
-        img = img.resize((new_width, new_height))
-
-        # Create a new image with black background
-        new_img = Image.new("RGB", target_size)
-        # Calculate position to paste resized image
-        top_left_x = (target_size[0] - new_width) // 2
-        top_left_y = (target_size[1] - new_height) // 2
-        new_img.paste(img, (top_left_x, top_left_y))
-
-        # Save the padded image
-        new_img.save(output_image_path)
-
-    return output_image_path
+    return image_paths
 
 
 def generate_audio(
@@ -201,18 +161,22 @@ def generate_video(
     # Get image keywords for each line in the analogy script
     image_search_terms = []
 
+    # for line in chunking_script(analogy_script):
+    #     keyword = get_image_search_term(line)
+    #     image_search_terms.append(keyword)
+
     for line in analogy_script.splitlines():
         keyword = get_image_search_term(line)
         image_search_terms.append(keyword)
 
     # Create stock photos API object
     for search_term in image_search_terms:
-        photos = get_photos(search_term)
+        photos = generate_images_dalle(search_term)
 
         assert len(photos) > 0, f"No photos found for search term: {search_term}"
 
         photo = photos[0]
-        download_image(photo, DEFAULT_IMAGE_DIR)
+        # download_image(photo, DEFAULT_IMAGE_DIR)
 
     # Generate video narration
     audio_path = generate_audio(analogy_script)
@@ -221,8 +185,7 @@ def generate_video(
     images = os.listdir(DEFAULT_IMAGE_DIR)
     images = [os.path.join(DEFAULT_IMAGE_DIR, image_path) for image_path in images]
 
-    for i in range(len(images)):
-        resize_image(images[i], images[i], video_dimension)
+
 
     # Load the audio clip once
     audio = AudioFileClip(audio_path)
